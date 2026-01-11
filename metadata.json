@@ -1,0 +1,7 @@
+{
+  "name": "WhatsApp Connect Pro",
+  "description": "A high-end interface for managing WhatsApp connections, QR scanning, and automated messaging using the Gemini API for message crafting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
