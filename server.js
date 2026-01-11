@@ -15,7 +15,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from current directory (for index.html/index.tsx)
+// Priority: Serve static files (index.tsx, App.tsx, etc. for the browser to fetch via ESM)
 app.use(express.static(__dirname));
 
 let sock = null;
@@ -23,40 +23,44 @@ let qrCode = null;
 let connectionStatus = 'DISCONNECTED';
 
 async function connectToWhatsApp() {
-    // Multi-file auth state stores session in 'auth_info_baileys' folder
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-    
-    sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: true,
-        logger: pino({ level: 'silent' }),
-        browser: ['WhatsApp Pro', 'Chrome', '1.0.0']
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+    try {
+        const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
         
-        if (qr) {
-            qrCode = await QRCode.toDataURL(qr);
-            connectionStatus = 'QR_READY';
-        }
+        sock = makeWASocket({
+            auth: state,
+            printQRInTerminal: false,
+            logger: pino({ level: 'silent' }),
+            browser: ['WhatsApp Pro', 'Chrome', '1.0.0']
+        });
 
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            connectionStatus = 'DISCONNECTED';
-            qrCode = null;
-            if (shouldReconnect) connectToWhatsApp();
-        } else if (connection === 'open') {
-            connectionStatus = 'CONNECTED';
-            qrCode = null;
-            console.log('WhatsApp Connected Successfully!');
-        }
-    });
+        sock.ev.on('creds.update', saveCreds);
+
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+            
+            if (qr) {
+                qrCode = await QRCode.toDataURL(qr);
+                connectionStatus = 'QR_READY';
+            }
+
+            if (connection === 'close') {
+                const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+                connectionStatus = 'DISCONNECTED';
+                qrCode = null;
+                console.log('Connection closed. Reconnecting:', shouldReconnect);
+                if (shouldReconnect) connectToWhatsApp();
+            } else if (connection === 'open') {
+                connectionStatus = 'CONNECTED';
+                qrCode = null;
+                console.log('WhatsApp Connected Successfully!');
+            }
+        });
+    } catch (err) {
+        console.error('Baileys Setup Error:', err);
+    }
 }
 
-// Start Baileys connection logic
+// Initialize connection
 connectToWhatsApp();
 
 // API Endpoints
@@ -71,8 +75,8 @@ app.post('/send', async (req, res) => {
     }
     
     try {
-        // WhatsApp ID format: number@s.whatsapp.net
-        const jid = `${number}@s.whatsapp.net`;
+        const cleanNumber = number.replace(/\D/g, '');
+        const jid = `${cleanNumber}@s.whatsapp.net`;
         await sock.sendMessage(jid, { text: message });
         res.json({ success: true });
     } catch (err) {
@@ -81,12 +85,12 @@ app.post('/send', async (req, res) => {
     }
 });
 
-// Fallback to index.html for SPA behavior
+// Serve the SPA for any non-API route
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server instance active on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
 });
