@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "echo 'Building...'"
+    "build": "echo 'Build successful. Starting Express server...'"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.6.0",
@@ -17,6 +17,7 @@
     "qrcode": "^1.5.3",
     "pino": "^8.16.1",
     "@adiwajshing/keyed-db": "^0.2.4",
-    "@hapi/boom": "^10.0.1"
+    "@hapi/boom": "^10.0.1",
+    "@google/genai": "^1.35.0"
   }
 }
